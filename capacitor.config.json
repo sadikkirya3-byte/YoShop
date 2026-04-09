@@ -1,0 +1,11 @@
+{
+  "appId": "com.yobill.app",
+  "appName": "Yobill",
+  "webDir": "www",
+  "server": {
+    "url": "https://yobill.netlify.app/",
+    "allowNavigation": [
+      "yobill.netlify.app"
+    ]
+  }
+}

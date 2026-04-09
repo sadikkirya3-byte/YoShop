@@ -55,8 +55,8 @@
   let menu, activeOrders, transactions, settings, staff, dishCategories, customers;
 
   const defaultDishCategories = [];
+  const ACTIVE_ORDER_ID = 'default';
   const defaultSettings = { 
-    tableCount: 12,
     name: "My Business",
     address: "123 Business Avenue, Suite 100",
     contact: "555-123-4567",
@@ -109,16 +109,90 @@
     }
   }
 
-  function exitTableSelection() {
-    document.getElementById('menuTab').dataset.tableId = '';
-    // Switch to the tables tab for a clear workflow
-    showTab('tablesTab', document.querySelector('nav button[onclick*="tablesTab"]'));
-  }
-
   function updateCurrencyDisplay() {
     const symbol = settings.currency || '$';
     document.querySelectorAll('.currency-symbol').forEach(el => el.textContent = symbol);
   }
+
+  // ===== App Initialization =====
+  window.onload = async () => {
+    console.log('window.onload started');
+
+    // Service Worker Registration
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.register('/sw.js').then(registration => {
+        console.log('Service Worker registered with scope:', registration.scope);
+
+        registration.onupdatefound = () => {
+          const installingWorker = registration.installing;
+          if (installingWorker == null) return;
+
+          installingWorker.onstatechange = () => {
+            if (installingWorker.state === 'installed') {
+              if (navigator.serviceWorker.controller) {
+                // New content available, but old one is still serving
+                console.log('New content available and waiting to activate.');
+                if (confirm('New version available! Refresh to update?')) {
+                  installingWorker.postMessage({ type: 'SKIP_WAITING' });
+                  window.location.reload();
+                }
+              } else {
+                console.log('Content is cached for offline use.');
+              }
+            }
+          };
+        };
+      }).catch(error => {
+        console.error('Service Worker registration failed:', error);
+      });
+    }
+
+    try {
+      await initDB();
+      
+      // Load data or use defaults
+      menu = await loadState('menu') || [];
+      activeOrders = await loadState('activeOrders') || {};
+      transactions = await loadState('transactions') || [];
+      settings = await loadState('settings') || { ...defaultSettings };
+      staff = await loadState('staff') || [];
+      dishCategories = await loadState('dishCategories') || [];
+      customers = await loadState('customers') || [];
+      units = await loadState('units') || [];
+      console.log('All data loaded');
+
+      // Initialize UI
+      updateCurrencyDisplay();
+      // Ensure the nav button exists before trying to use it
+      const dashboardButton = document.querySelector('nav button');
+      if (dashboardButton) {
+        showTab('dashboardTab', dashboardButton);
+      } else {
+        console.error('Dashboard button not found in navigation.');
+      }
+      
+      // Hide splash screen
+      document.body.classList.remove('loading');
+      const splash = document.getElementById('splash-screen');
+      if (splash) {
+        splash.style.opacity = '0';
+        setTimeout(() => {
+          splash.style.display = 'none';
+          // Reveal header and app layout
+          document.querySelector('header').style.visibility = 'visible';
+          document.querySelector('header').style.opacity = '1';
+          document.querySelector('.app-layout').style.visibility = 'visible';
+          document.querySelector('.app-layout').style.opacity = '1';
+          console.log('Splash screen hidden, app layout visible');
+        }, 800);
+      } else {
+        console.error('Splash screen element not found.');
+      }
+    } catch (error) {
+      console.error("Initialization failed:", error);
+      alert("Critical error during app startup. Please refresh the page.");
+    }
+  };
 
   // ===== Tabs =====
   function showTab(tabId, btn) {
@@ -138,12 +212,8 @@
       case 'transactionsTab':
         renderTransactions();
         break;
-      case 'tablesTab':
-        renderTables();
-        break;
       case 'menuTab':
-        const tableId = activeSection.dataset.tableId;
-        renderMenu(tableId);
+        renderMenu();
         break;
       case 'addDishTab':
         renderDishesTable();
@@ -175,7 +245,7 @@
   }
 
   // ===== Menu =====
-  function renderMenu(tableId) {
+  function renderMenu() {
     const container = document.getElementById('menuCategories');
     container.innerHTML = '';
 
@@ -187,8 +257,6 @@
     const categories = [...new Set(filteredMenu.map(d => d.category || "Uncategorized"))];
     
     const menuTab = document.getElementById('menuTab');
-    const menuTabTitle = document.getElementById('menuTabTitle');
-    const exitTableBtn = document.getElementById('exitTableBtn');
     categories.forEach(cat => {
       const catDiv = document.createElement('div');
       if (cat !== "Uncategorized") {
@@ -200,7 +268,7 @@
           .filter(d => (d.category || "Uncategorized") === cat)
           .forEach((dish, i) => {
             const item = document.createElement('div');
-            const currentOrder = activeOrders[tableId] || { items: [] };
+            const currentOrder = activeOrders[ACTIVE_ORDER_ID] || { items: [] };
             const orderItem = currentOrder.items.find(o => o.name === dish.name);
             const quantity = orderItem ? orderItem.qty : 0;
 
@@ -209,9 +277,8 @@
 
             item.className = itemClasses;
             item.onclick = (e) => { // Allow adding item by clicking the card
-              if (!tableId) return alert("Please select a table first from the 'Tables' tab.");
               if (e.target.closest('.item-controls')) return;
-              addToOrder(tableId, dish.name);
+              addToOrder(dish.name);
             };
 
             item.innerHTML = `
@@ -221,13 +288,11 @@
                   <h4>${dish.name}</h4>
                   <p><span class="currency-symbol">${settings.currency || '$'}</span>${formatCurrency(dish.price)}</p>
                 </div>
-                ${tableId ? `
                   <div class="item-controls">
-                    <button onclick="decreaseQty('${tableId}', '${dish.name}')" ${quantity === 0 ? 'disabled' : ''}>-</button>
+                    <button onclick="decreaseQty('${dish.name}')" ${quantity === 0 ? 'disabled' : ''}>-</button>
                     <span style="font-weight: bold; min-width: 20px; text-align: center;">${quantity}</span>
-                    <button onclick="addToOrder('${tableId}', '${dish.name}')">+</button>
-                  </div>` : ''
-                }
+                    <button onclick="addToOrder('${dish.name}')">+</button>
+                  </div>
               </div>`;
             grid.appendChild(item);
           });
@@ -235,22 +300,7 @@
       container.appendChild(catDiv);
     });
 
-    const isTableSelected = !!tableId;
-    document.getElementById('menuOrderSummary').querySelectorAll('.btn').forEach(button => {
-        button.disabled = !isTableSelected;
-    });
-
-    if (!tableId) {
-      menuTabTitle.textContent = '';
-      menuTabTitle.parentElement.style.display = 'none';
-      exitTableBtn.style.display = 'none';
-    } else {
-      menuTabTitle.textContent = `Order for Table ${tableId}`;
-      menuTabTitle.parentElement.style.display = 'flex';
-      exitTableBtn.style.display = 'block';
-    }
-
-    updateOrders(tableId);
+    updateOrders();
     renderDishesTable();
     saveData();
   }
@@ -313,7 +363,7 @@
         menu.push(dishData);
       }
 
-      renderMenu(document.getElementById('menuTab').dataset.tableId);
+      renderMenu();
       renderDishesTable(); // Update the dishes list
       updateDashboard();
       saveData(); // Ensure changes are saved
@@ -538,12 +588,10 @@
   let splitState = { unassigned: [], bills: [] };
 
   function openBillSplitModal() {
-    const tableId = document.getElementById('menuTab').dataset.tableId;
-    const currentOrder = activeOrders[tableId];
-    if (!tableId || !currentOrder || currentOrder.items.length === 0) {
+    const currentOrder = activeOrders[ACTIVE_ORDER_ID];
+    if (!currentOrder || currentOrder.items.length === 0) {
       return alert("No active order to split.");
     }
-    document.getElementById('splitBillTableId').textContent = tableId;
 
     // Initialize split state from the current order
     splitState.unassigned = JSON.parse(JSON.stringify(currentOrder.items)); // Deep copy
@@ -636,8 +684,7 @@
       return alert("Please assign all items before processing payments.");
     }
 
-    const tableId = document.getElementById('menuTab').dataset.tableId;
-    const serverName = activeOrders[tableId].server || 'N/A';
+    const serverName = activeOrders[ACTIVE_ORDER_ID].server || 'N/A';
     closeSplitBillModal();
 
     for (let i = 0; i < splitState.bills.length; i++) {
@@ -658,7 +705,7 @@
 
       if (paymentConfirmed) {
         const paymentMethod = document.getElementById('paymentMethod').value;
-        const transaction = { date: new Date().toISOString(), customerName: serverName, tableNo: tableId, items: bill.items, total: billTotal, paymentMethod: paymentMethod };
+        const transaction = { date: new Date().toISOString(), customerName: serverName, tableNo: 'N/A', items: bill.items, total: billTotal, paymentMethod: paymentMethod };
         transactions.unshift(transaction);
         bill.items.forEach(item => deductStock(item.name, item.qty));
         document.getElementById('paymentModal').style.display = 'none';
@@ -670,20 +717,18 @@
     }
 
     // All payments processed, clear the original order
-    delete activeOrders[tableId];
+    delete activeOrders[ACTIVE_ORDER_ID];
     saveData();
-    renderMenu(tableId);
-    renderTables();
+    renderMenu();
     updateDashboard();
     document.getElementById('servedBy').value = '';
-    alert(`All split payments for Table ${tableId} processed successfully!`);
+    alert(`All split payments processed successfully!`);
   }
 
   // ===== Orders =====
-  function addToOrder(tableId, name, notes = null) {
-    if (!tableId) return alert("Please select a table first.");
-    if (!activeOrders[tableId]) {
-      activeOrders[tableId] = { items: [], server: '' };
+  function addToOrder(name, notes = null) {
+    if (!activeOrders[ACTIVE_ORDER_ID]) {
+      activeOrders[ACTIVE_ORDER_ID] = { items: [], server: '' };
     }
 
     // If notes are being added, we always create a new item.
@@ -691,67 +736,40 @@
         const note = prompt(`Add special requests for ${name}:`, "");
         if (note !== null) { // prompt not cancelled
             // Add as a new line item with a unique ID
-            activeOrders[tableId].items.push({ ...dish, qty: 1, notes: note, id: Date.now() });
-            updateOrders(tableId);
-            renderMenu(tableId);
+            activeOrders[ACTIVE_ORDER_ID].items.push({ ...dish, qty: 1, notes: note, id: Date.now() });
+            updateOrders();
+            renderMenu();
         }
         return;
     }
 
     const dish = menu.find(d => d.name === name);
-    const existing = activeOrders[tableId].items.find(o => o.name === name && !o.notes);
+    const existing = activeOrders[ACTIVE_ORDER_ID].items.find(o => o.name === name && !o.notes);
     if (existing) existing.qty++;
-    else activeOrders[tableId].items.push({ ...dish, qty: 1 });
+    else activeOrders[ACTIVE_ORDER_ID].items.push({ ...dish, qty: 1 });
 
-    updateOrders(tableId);
-    renderMenu(tableId);
+    updateOrders();
+    renderMenu();
   }
 
-  function decreaseQty(tableId, name, id = null) {
-    if (!tableId || !activeOrders[tableId]) return;
+  function decreaseQty(name, id = null) {
+    if (!activeOrders[ACTIVE_ORDER_ID]) return;
 
-    const orderItem = id ? activeOrders[tableId].items.find(o => o.id === id) : activeOrders[tableId].items.find(o => o.name === name && !o.notes);
+    const orderItem = id ? activeOrders[ACTIVE_ORDER_ID].items.find(o => o.id === id) : activeOrders[ACTIVE_ORDER_ID].items.find(o => o.name === name && !o.notes);
     if (!orderItem) return;
 
     if (orderItem.qty > 1) {
       orderItem.qty--;
     } else {
-      const itemIndex = activeOrders[tableId].items.findIndex(o => (id ? o.id === id : (o.name === name && !o.notes)));
-      if (itemIndex > -1) activeOrders[tableId].items.splice(itemIndex, 1);
+      const itemIndex = activeOrders[ACTIVE_ORDER_ID].items.findIndex(o => (id ? o.id === id : (o.name === name && !o.notes)));
+      if (itemIndex > -1) activeOrders[ACTIVE_ORDER_ID].items.splice(itemIndex, 1);
     }
-    updateOrders(tableId);
-    renderMenu(tableId);
+    updateOrders();
+    renderMenu();
   }
 
-  // ===== Tables =====
-  function renderTables() {
-    const grid = document.getElementById('tablesGrid');
-    grid.innerHTML = ''; // Clear existing tables
-    for (let i = 1; i <= (settings.tableCount || 12); i++) {
-      const tableCard = document.createElement('div');
-      const order = activeOrders[i];
-      const status = order && order.items.length > 0 ? 'occupied' : 'available';
-      tableCard.className = `table-card ${status}`;
-      tableCard.dataset.tableId = i;
-      tableCard.innerHTML = `
-        <span>Table ${i}</span>
-        ${status === 'occupied' ? `<div class="table-total"><span class="currency-symbol">$</span>${formatCurrency(order.items.reduce((sum, item) => sum + (item.price * item.qty), 0))}</div>` : ''}
-      `;
-      tableCard.onclick = () => {
-        document.getElementById('menuTab').dataset.tableId = i; // Set table ID for the menu
-        showTab('menuTab', document.querySelector('nav button[onclick*="menuTab"]'));
-      };
-      grid.appendChild(tableCard);
-    }
-  }
-
-  function updateOrders(tableId) {
-    if (!tableId) {
-      document.getElementById('menuTotal').textContent = '0';
-      return;
-    }
-
-    const currentOrder = activeOrders[tableId] || { items: [] };
+  function updateOrders() {
+    const currentOrder = activeOrders[ACTIVE_ORDER_ID] || { items: [] };
     
     const totals = calculateTransactionTotals(currentOrder.items);
     const total = totals.total;
@@ -762,11 +780,10 @@
   }
 
   function processBill() { // This now opens the payment modal
-    const tableId = document.getElementById('menuTab').dataset.tableId;
-    if (!tableId || !activeOrders[tableId] || activeOrders[tableId].items.length === 0) {
+    if (!activeOrders[ACTIVE_ORDER_ID] || activeOrders[ACTIVE_ORDER_ID].items.length === 0) {
       return alert("Cannot bill an empty order.");
     }
-    const currentOrder = activeOrders[tableId];
+    const currentOrder = activeOrders[ACTIVE_ORDER_ID];
     const total = calculateTransactionTotals(currentOrder.items).total;
 
     document.getElementById('paymentTotalDue').textContent = formatCurrency(total);
@@ -792,8 +809,7 @@
   }
 
   function finalizePayment(isSplit = false) {
-    const tableId = document.getElementById('menuTab').dataset.tableId;
-    const currentOrder = activeOrders[tableId];
+    const currentOrder = activeOrders[ACTIVE_ORDER_ID];
     const paymentMethod = document.getElementById('paymentMethod').value;
     const amountTendered = parseFloat(document.getElementById('amountTendered').value);
     const totals = calculateTransactionTotals(currentOrder.items);
@@ -816,7 +832,7 @@
     const transaction = {
       date: new Date().toISOString(),
       customerName: document.getElementById('servedBy').value || 'N/A',
-      tableNo: tableId,
+      tableNo: 'N/A',
       items: [...currentOrder.items],
       total: total,
       subtotal: totals.subtotal,
@@ -830,14 +846,13 @@
     }
     transactions.unshift(transaction);
 
-    delete activeOrders[tableId]; // Clear the order for the table
+    delete activeOrders[ACTIVE_ORDER_ID]; // Clear the order
     saveData();
-    renderMenu(tableId);
-    renderTables();
+    renderMenu();
     updateDashboard();
     document.getElementById('paymentModal').style.display = 'none';
     document.getElementById('servedBy').value = '';
-    alert(`Bill for Table ${tableId} processed successfully!`);
+    alert(`Bill processed successfully!`);
   }
 
   // Helper to calculate subtotal, tax, and total
@@ -945,11 +960,7 @@
       try { renderInventoryReport(); } catch (e) { console.error("Error updating inventory:", e); }
       try { updateDashboard(); } catch (e) { console.error("Error updating dashboard:", e); }
       
-      try {
-        const menuTab = document.getElementById('menuTab');
-        const tableId = menuTab ? menuTab.dataset.tableId : null;
-        renderMenu(tableId);
-      } catch (e) { console.error("Error updating menu:", e); }
+      try { renderMenu(); } catch (e) { console.error("Error updating menu:", e); }
       
       try { renderDishesTable(); } catch (e) { console.error("Error updating dishes:", e); }
       try { renderStockListTable(); } catch (e) { console.error("Error updating stock:", e); }
@@ -963,14 +974,13 @@
   function previewOrder(transactionData = null) {
     const receiptModal = document.getElementById('receiptModal');
     let currentTransaction;
-    const tableId = document.getElementById('menuTab').dataset.tableId;
 
     if (transactionData) {
       currentTransaction = transactionData;
       // Store the historical transaction data on the modal itself for the print function to use
       receiptModal._transactionData = transactionData;
     } else {
-      const currentOrder = activeOrders[tableId];
+      const currentOrder = activeOrders[ACTIVE_ORDER_ID];
       if (!currentOrder || currentOrder.items.length === 0) {
         return alert("No active order to preview.");
       } else {
@@ -978,7 +988,7 @@
         currentTransaction = {
           date: new Date().toLocaleString(),
           customerName: document.getElementById('servedBy').value || 'N/A',
-          tableNo: tableId,
+          tableNo: 'N/A',
           items: [...currentOrder.items],
           total: totals.total,
           subtotal: totals.subtotal,
@@ -1052,14 +1062,13 @@
 
     if (!printTransaction) {
       // If no historical transaction is being viewed, get the active order
-      const tableId = document.getElementById('menuTab').dataset.tableId;
-      const currentOrder = activeOrders[tableId];
+      const currentOrder = activeOrders[ACTIVE_ORDER_ID];
       if (!currentOrder || currentOrder.items.length === 0) return alert("No active order to print.");
       const totals = calculateTransactionTotals(currentOrder.items);
       printTransaction = {
         date: new Date().toLocaleString(),
         customerName: document.getElementById('servedBy').value || 'N/A',
-        tableNo: tableId,
+        tableNo: 'N/A',
         items: [...currentOrder.items],
         total: totals.total,
         subtotal: totals.subtotal,
@@ -1433,15 +1442,14 @@
 
   function reopenTransaction(index) {
     const transactionToEdit = transactions[index];
-    const tableId = transactionToEdit.tableNo;
 
-    if (activeOrders[tableId] && activeOrders[tableId].items.length > 0) {
-      return alert(`Cannot re-open this bill because Table ${tableId} is currently occupied. Please clear the table first.`);
+    if (activeOrders[ACTIVE_ORDER_ID] && activeOrders[ACTIVE_ORDER_ID].items.length > 0) {
+      return alert(`Cannot re-open this bill because there is an active order in progress. Please clear the current order first.`);
     }
 
-    if (confirm(`This will move the transaction back to an active order on Table ${tableId} and delete the original bill record. Do you want to continue?`)) {
+    if (confirm(`This will move the transaction back to an active order and delete the original bill record. Do you want to continue?`)) {
       // Restore the order
-      activeOrders[tableId] = { 
+      activeOrders[ACTIVE_ORDER_ID] = { 
         items: transactionToEdit.items, 
         server: transactionToEdit.customerName 
       };
@@ -1450,9 +1458,8 @@
       transactions.splice(index, 1);
       saveData();
       updateDashboard();
-      alert(`Bill for Table ${tableId} has been re-opened for editing.`);
+      alert(`Bill has been re-opened for editing.`);
       // Navigate user to the restored order
-      document.getElementById('menuTab').dataset.tableId = tableId;
       showTab('menuTab', document.querySelector('nav button[onclick*="menuTab"]'));
     }
   }
@@ -1759,8 +1766,7 @@
 
     // --- Re-render all relevant sections to reflect currency change ---
     updateDashboard();
-    renderTables();
-    renderMenu(document.getElementById('menuTab').dataset.tableId);
+    renderMenu();
     renderDishesTable();
     renderInventoryReport();
     renderStockListTable();

@@ -36,10 +36,10 @@
     <!-- Mini Thermal Printer Emoji -->
     <span class="header-logo">🖨️</span>
     Yobill
-    <button id="header-printer-status" class="icon-btn i right: 105px;" title="Printer Connected">
+    <button id="header-printer-status" class="icon-btn" style="right: 105px;" title="Printer Connected">
       <svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" fill="currentColor" viewBox="0 0 16 16"><path d="M5 1a2 2 0 0 0-2 2v2H2a2 2 0 0 0-2 2v3a2 2 0 0 0 2 2h1v1a2 2 0 0 0 2 2h6a2 2 0 0 0 2-2v-1h1a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2h-1V3a2 2 0 0 0-2-2H5zM4 3a1 1 0 0 1 1-1h6a1 1 0 0 1 1 1v2H4V3zm1 5a2 2 0 1 0 0 4 2 2 0 0 0 0-4zm0 1a1 1 0 1 1 0 2 1 1 0 0 1 0-2z"/></svg>
     </button>
-    <button id="update-notification-btn" class="icon-btn inline-style-2" onclick="trigg"color: white;" title="Check for Updates">
+    <button id="update-notification-btn" class="icon-btn inline-style-2" onclick="triggerAppUpdate()" title="Check for Updates">
       <span>🔔</span>
       <span id="update-badge" class="inline-style-3"></span>
     </button>
@@ -50,8 +50,8 @@
 
   <!-- Bill Split Modal -->
   <div id="billSplitModal" class="receipt-modal-overlay">
-    <div class="receipt-modal-content i width: 800px;">
-      <h3>Split Bill for Table <span id="splitBillTableId"></span></h3>
+    <div class="receipt-modal-content" style="width: 800px;">
+      <h3>Split Bill</h3>
       <div class="inline-style-5">
         <!-- Unassigned Items Column -->
         <div id="unassignedColumn" class="inline-style-6">
@@ -67,8 +67,8 @@
       </div>
       <div class="receipt-actions">
         <button class="btn" onclick="addSplitBill()">+ Add Person</button>
-        <button class="btn inline-style-10" id="processSplitBtn" onclick="processSround: #28a745;">Process Payments</button>
-        <button class="btn inline-style-11" onclick="closeSpround: #6c757d;">Cancel</button>
+        <button class="btn inline-style-10" id="processSplitBtn" onclick="processSplitPayments()">Process Payments</button>
+        <button class="btn inline-style-11" onclick="closeSplitBillModal()">Cancel</button>
       </div>
     </div>
   </div>
@@ -76,10 +76,10 @@
 
   <!-- Payment Modal -->
   <div id="paymentModal" class="receipt-modal-overlay">
-    <div class="receipt-modal-content ix-width: 450px;">
+    <div class="receipt-modal-content" style="max-width: 450px;">
         <h3>Complete Payment</h3>
         <div id="paymentDetails">
-            <div class="total in-bottom: 20px;">
+            <div class="total" style="margin-bottom: 20px;">
                 Total Due: <span class="currency-symbol">$</span><span id="paymentTotalDue">0.00</span>
             </div>
             <div class="input-row">
@@ -92,13 +92,13 @@
             </div>
             <div id="cashPaymentFields" class="inline-style-16">
                 <div class="input-row"><label for="amountTendered" class="inline-style-14">Amount Tendered:</label><input type="number" id="amountTendered" oninput="calculateChange()" placeholder="0.00" step="0.01"></div>
-                <div class="total ifont-size: 1em;">Change Due: <span class="currency-symbol">$</span><span id="changeDue">0.00</span></div>
+                <div class="total" style="font-size: 1em;">Change Due: <span class="currency-symbol">$</span><span id="changeDue">0.00</span></div>
             </div>
         </div>
         <div id="splitPaymentContainer" class="inline-style-18">
             <!-- Split payment details will be injected here -->
         </div>
-        <div class="receipt-actions"><button class="btn inline-style-10" id="confirmPaymentBtn" onclick="finround: #28a745;">Confirm Payment</button><button class="btn inline-style-11" onclick="document.getElementById('paymentModal').style.round: #6c757d;">Cancel</button></div>
+        <div class="receipt-actions"><button class="btn inline-style-10" id="confirmPaymentBtn" onclick="finalizePayment()">Confirm Payment</button><button class="btn inline-style-11" onclick="document.getElementById('paymentModal').style.display='none'">Cancel</button></div>
     </div></div>
 
   <!-- Receipt Modal -->
@@ -108,10 +108,10 @@
         <!-- Receipt content will be injected here -->
       </div>
       <div class="receipt-actions">
-        <button class="btn inline-style-19" onclick="downloadCurrentround: #17a2b8;">Save PDF</button>
-        <button class="btn inline-style-20" onclick="round: #007bff;">Print</button>
-        <button class="btn inline-style-21" onclick="directPrint()" id=" display: none;">Print to Device</button>
-        <button class="btn inline-style-11" onclick="document.getElementById('receiptModal').style.round: #6c757d;">Close</button>
+        <button class="btn inline-style-19" onclick="downloadCurrentReceiptAsPDF()">Save PDF</button>
+        <button class="btn inline-style-20" onclick="printReceipt()">Print</button>
+        <button class="btn inline-style-21" onclick="directPrint()" id="directPrintBtn" style="display: none;">Print to Device</button>
+        <button class="btn inline-style-11" onclick="document.getElementById('receiptModal').style.display='none'">Close</button>
       </div>
     </div>
   </div>
@@ -128,7 +128,6 @@
   <div class="app-layout">
     <nav>
       <button class="active" onclick="showTab('dashboardTab', this)"><span>📊</span><span>Dashboard</span></button>
-      <button onclick="showTab('tablesTab', this)"><span>📍</span><span>Tables</span></button>
       <button onclick="showTab('menuTab', this)"><span>🍔</span><span>Menu</span></button>
       <button onclick="showTab('addDishTab', this)"><span>🍽️</span><span>Dishes</span></button>
       <button onclick="showTab('stockTab', this)"><span>📦</span><span>Stock</span></button>
@@ -142,30 +141,23 @@
       <!-- Menu -->
       <section id="menuTab" data-table-id="">
         <div class="inline-style-26">
-          <h3 id="menuTabTitle" class="inline-style-27">Menu</h3>
-          <button id="exitTableBtn" class="icon-btn inline-style-28" onclick="exitTavar(--primary);" title="Exit Table View">&times;</button>
+          <h3 class="inline-style-27">Menu</h3>
         </div>
         <div id="menuOrderSummary" class="inline-style-29">
-            <div class="total iyle="margin: 0;">Total: <span class="currency-symbol">$</span> <span id="menuTotal">0.00</span></div>
+            <div class="total" style="margin: 0;">Total: <span class="currency-symbol">$</span> <span id="menuTotal">0.00</span></div>
             <div>
                 <button class="btn" onclick="previewOrder()">Preview</button>
-                <button class="btn inline-style-19" onclick="openBiround: #17a2b8;">Split Bill</button>
-                <button class="btn inline-style-10" onclick=round: #28a745;">Bill</button>
+                <button class="btn inline-style-19" onclick="openBillSplitModal()">Split Bill</button>
+                <button class="btn inline-style-10" onclick="processBill()">Bill</button>
             </div>
         </div>
-        <div class="input-row ix-wrap: nowrap;">
+        <div class="input-row" style="flex-wrap: nowrap;">
           <input type="text" id="menuSearch" placeholder="Search for a dish..." onkeyup="renderMenu()" class="inline-style-32">
           <select id="servedBy" onchange="handleServerChange()" class="inline-style-33">
             <option value="">Served by...</option>
           </select>
         </div>
         <div id="menuCategories"></div>
-      </section>
-
-      <!-- Tables -->
-      <section id="tablesTab">
-        <h3>📍 Table Map</h3>
-        <div id="tablesGrid"></div>
       </section>
 
       <!-- Orders -->
@@ -190,11 +182,11 @@
             <input type="hidden" id="dishIndex">
             
             <!-- Row 1: Basic Info -->
-            <div class="input-row ims: flex-start;">
+            <div class="input-row" style="align-items: flex-start;">
               <input type="text" id="dishName" placeholder="Name" class="inline-style-37">
               <div class="inline-style-38">
-                <input type="text" id="dishBarcode" placeholder="Barcode/SKU" class="inline-style-39">
-                <button class="btn inline-style-40" onclick="generateR8px; margin: 0;" title="Generate Random Barcode">🎲</button>
+                <input type="text" id="dishBarcode" placeholder="Barcode/SKU" class="inline-style-39"> 
+                <button class="btn inline-style-40" onclick="generateRandomBarcode()" title="Generate Random Barcode">🎲</button>
               </div>
               <select id="dishCategory" class="inline-style-15"></select>
               <input type="file" id="dishImage" accept="image/*" onchange="previewDishImage(this)" class="inline-style-39">
@@ -222,18 +214,18 @@
             </div>
 
             <!-- Action Buttons -->
-            <div class="input-row irgin-top: 15px;">
+            <div class="input-row" style="margin-top: 15px;">
               <div class="inline-style-51">Profit: <span class="currency-symbol">$</span><span id="dishProfitValue">0.00</span> | Margin: <span id="dishProfitMargin">0.00</span>%</div>
               <div>
                 <button class="btn" id="saveDishButton" onclick="addDish(this)">Save</button>
-                <button class="btn inline-style-11" onclick="toggleAddDround: #6c757d;">Cancel</button>
+                <button class="btn inline-style-11" onclick="toggleAddDishForm(false)">Cancel</button>
               </div>
             </div>
         </div>
 
         <h3>📋 Dishes List 
-          <button class="btn inline-style-52" onclick="toggleAdd="float: right;">➕ Add New Dish</button>
-          <button class="btn inline-style-53" onclick="generateAndPin-right: 10px;">🖨️ Print Barcodes</button>
+          <button class="btn inline-style-52" onclick="toggleAddDishForm(true)">➕ Add New Dish</button>
+          <button class="btn inline-style-53" onclick="generateAndPrintBarcodes()" style="margin-right: 10px;">🖨️ Print Barcodes</button>
         </h3>
         <div>
           <table>
@@ -290,7 +282,7 @@
       <!-- Stock -->
       <section id="stockTab">
         <h3>📦 Stock Management</h3>
-        <div class="input-row in-bottom: 20px;">
+        <div class="input-row" style="margin-bottom: 20px;">
           <label for="lowStockThreshold">Low Stock:</label>
           <input type="number" id="lowStockThreshold" placeholder="e.g., 10" min="0" class="inline-style-55">
           <button class="btn" onclick="saveSettings()">Save</button>
@@ -308,10 +300,10 @@
             <div class="input-row">
                 <input type="number" id="newStockValue" placeholder="Enter new stock quantity" min="0">
                 <button class="btn" onclick="saveStockAdjustment()">Save Stock</button>
-                <button class="btn inline-style-11" onclick="toggleStockAdjustmround: #6c757d;">Cancel</button>
+                <button class="btn inline-style-11" onclick="toggleStockAdjustmentForm(false)">Cancel</button>
             </div>
         </div>
-        <h5 class="inline-style-56">All Items Stock <button class="btn inline-style-52" onclick="toggleNewStock="float: right;">➕ Add New Item</button></h5>
+        <h5 class="inline-style-56">All Items Stock <button class="btn inline-style-52" onclick="toggleNewStockItemForm(true)" style="float: right;">➕ Add New Item</button></h5>
         <div id="newStockItemFormContainer" class="inline-style-59">
             <h5 class="inline-style-7">Add New Stock Item / Ingredient</h5>
             <div class="input-row">
@@ -322,14 +314,14 @@
                 <input type="number" id="newStockItemCost" placeholder="Cost Price" step="0.01" min="0">
                 <input type="number" id="newStockItemStock" placeholder="Initial Stock" min="0">
             </div>
-            <div class="input-row itent: flex-end;">
+            <div class="input-row" style="justify-content: flex-end;"> 
                 <button class="btn" onclick="saveNewStockItem()">Save Item</button>
-                <button class="btn inline-style-11" onclick="toggleNewStockIround: #6c757d;">Cancel</button>
+                <button class="btn inline-style-11" onclick="toggleNewStockItemForm(false)">Cancel</button>
             </div>
         </div>
         <table class="inline-style-57">
           <thead>
-            <tr><th colspan="6"><input type="text" id="stockSearchInput" onkeyup="renderStockListTable()" placeholder="Search stock items..." class="inline-style-61"></th></tr>
+            <tr><th colspan="6"><input type="text" id="stockSearchInput" onkeyup="renderStockListTable()" placeholder="Search stock items..." style="width: 100%; padding: 8px; margin-bottom: 10px;"></th></tr>
           </thead>
           <thead>
             <tr>
@@ -348,7 +340,7 @@
       <!-- Transactions -->
       <section id="transactionsTab">
         <h3>🧾 Bills</h3>
-        <div class="input-row in-bottom: 15px;">
+        <div class="input-row" style="margin-bottom: 15px;">
           <input type="date" id="transactionFilterDate" onchange="renderTransactions()">
         </div>
         <div class="inline-style-63" id="transactionListContainer">
@@ -364,8 +356,8 @@
       <!-- Reports -->
       <section id="reportsTab">
         <h3>📈 Reports</h3>
-        <div class="input-row ilex-wrap: wrap;">
-          <div class="input-row i; flex-grow: 1;">
+        <div class="input-row" style="flex-wrap: wrap;">
+          <div class="input-row" style="flex-grow: 1;">
             <select id="reportType" onchange="renderReport()" class="inline-style-66">
               <option value="salesSummary">Summary</option>
               <option value="itemSales">Item Report</option>
@@ -373,10 +365,10 @@
             </select>
             <input type="date" id="reportDate" onchange="renderReport()" class="inline-style-66">
           </div>
-          <div class="input-row i; flex-grow: 1;">
-            <select id="reportStaffFilter" onchange="renderReport()" class="inline-style-66"><option value="">All Staff</option></select>
-            <button class="btn inline-style-39" onclick="="flex-grow: 1;">Generate</button>
-            <button class="btn inline-style-67" onclick="downl; flex-grow: 1;">Download PDF</button>
+          <div class="input-row" style="flex-grow: 1;">
+            <select id="reportStaffFilter" onchange="renderReport()" class="inline-style-66"><option value="">All Staff</option></select> 
+            <button class="btn inline-style-39" onclick="renderReport()">Generate</button> 
+            <button class="btn inline-style-67" onclick="downloadReportPDF()">Download PDF</button>
           </div>
         </div>
         <div id="reportOutput" class="inline-style-63"></div>
@@ -410,15 +402,6 @@
               <img id="logoPreview" src="" alt="Logo Preview" class="inline-style-70">
             </div>
             <button class="btn" onclick="saveSettings()">Save Settings</button>
-          </div>
-        </div>
-        <div class="settings-group">
-          <h4 class="settings-header">Table</h4>
-          <div class="settings-content">
-            <div class="input-row">
-              <input type="number" id="tableCountInput" placeholder="Number of tables" min="1">
-              <button class="btn" onclick="updateTableCount()">Set Tables</button>
-            </div>
           </div>
         </div>
         <div class="settings-group">
@@ -474,9 +457,9 @@
                   <input type="text" id="customerContactInput" placeholder="Contact (Phone/Email)" class="inline-style-39">
               </div>
               <div class="input-row"><input type="text" id="customerAddressInput" placeholder="Address" class="inline-style-39"></div>
-              <div class="input-row itent: flex-end;">
+              <div class="input-row" style="justify-content: flex-end;">
                   <button class="btn" id="saveCustomerBtn" onclick="addCustomer()">Save Customer</button>
-                  <button class="btn inline-style-72" onclick="toggleAddCustocolor: #6c757d;">Cancel</button>
+                  <button class="btn inline-style-72" onclick="toggleAddCustomerForm(false)">Cancel</button>
               </div>
             </div>
             <div id="customerListHeader" class="inline-style-73">
@@ -516,8 +499,8 @@
             </div>
             <div class="inline-style-57"><strong>Status:</strong> <span id="printerStatus">Not Connected</span></div>
             <div class="inline-style-57">
-              <button class="btn inline-style-77" onclick="testPrint()" idround: #17a2b8;">Test Print</button>
-              <button class="btn inline-style-78" onclick="disconnectPrinter()" id="disconround: #6c757d;">Disconnect</button>
+              <button class="btn inline-style-77" onclick="testPrint()" id="testPrintBtn">Test Print</button>
+              <button class="btn inline-style-78" onclick="disconnectPrinter()" id="disconnectPrinterBtn">Disconnect</button>
             </div>
           </div>
         </div>
@@ -536,14 +519,14 @@
           <h4 class="settings-header">Application Data</h4>
           <div class="settings-content">
             <p>Warning: This will permanently delete all menu items and order history.</p>
-            <div class="input-row i-items: center;">
-              <button class="btn inline-style-80" id="settingsUpdateBtn" onclick="trige; color: #000;">✨ Update App</button>
-              <button class="btn inline-style-20" id=round: #007bff;">Install App</button>
-              <button class="btn inline-style-20" onclick="exportTransround: #007bff;">Export CSV</button>
-              <button class="btn inline-style-19" onclick="bround: #17a2b8;">Backup JSON</button>
+            <div class="input-row" style="align-items: center;">
+              <button class="btn inline-style-80" id="settingsUpdateBtn" onclick="triggerAppUpdate()">✨ Update App</button>
+              <button class="btn" id="installAppBtn" style="background: #007bff; color: white;">Install App</button>
+              <button class="btn inline-style-20" onclick="exportTransactionsCSV()">Export CSV</button>
+              <button class="btn inline-style-19" onclick="backupData()">Backup JSON</button>
               <input type="file" id="restoreFile" accept=".json" class="inline-style-81">
-              <button class="btn inline-style-10" onclick=round: #28a745;">Restore</button>
-              <button class="btn inline-style-82" oncliround: #dc3545;">Reset App</button>
+              <button class="btn inline-style-10" onclick="restoreData()">Restore</button>
+              <button class="btn inline-style-82" onclick="resetApp()">Reset App</button>
             </div>
           </div>
         </div>

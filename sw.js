@@ -1,11 +1,11 @@
-const CACHE_NAME = 'yobill-v9';
+const CACHE_NAME = 'yobill-v12'; // Increment cache version to apply changes
 const urlsToCache = [
-  '/',
-  '/index.html',
-  '/manifest.json',
-  '/assets/icons/icon-192x192.png',
-  '/assets/icons/icon-512x512.png',
-  '/assets/icons/apple-touch-icon.png',
+  'index.html',
+  'style.css',
+  'script.js',
+  'manifest.json',
+  'assets/icons/icon-192x192.png',
+  'assets/icons/icon-512x512.png',
   'https://cdn.jsdelivr.net/npm/chart.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js',
   'https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.29/jspdf.plugin.autotable.min.js',
@@ -32,21 +32,31 @@ self.addEventListener('install', (event) => {
 });
 
 self.addEventListener('fetch', (event) => {
+  // Stale-While-Revalidate strategy
   event.respondWith(
-    caches.match(event.request, { ignoreSearch: true })
-      .then((response) => {
-        // Cache hit - return response
-        if (response) {
-          return response;
+    caches.open(CACHE_NAME).then(async (cache) => {
+      const cachedResponse = await cache.match(event.request, { ignoreSearch: true });
+      const networkPromise = fetch(event.request).then((networkResponse) => {
+        // Update cache with the new network response
+        // Only cache successful same-origin or CORS responses
+        if (networkResponse && networkResponse.status === 200) {
+          cache.put(event.request, networkResponse.clone());
         }
-        
-        return fetch(event.request).catch(() => {
-          // If fetch fails (offline), and it's a navigation request, return index.html
-          if (event.request.mode === 'navigate') {
-            return caches.match('/index.html');
-          }
-        });
-      })
+        return networkResponse;
+      }).catch(() => {
+        // If network fails and no cached response, and it's a navigation request,
+        // try to return the offline page (index.html)
+        if (!cachedResponse && event.request.mode === 'navigate') {
+          return cache.match('/index.html');
+        }
+        // If network fails and there's no cached response, and it's not a navigation request,
+        // or if it's a navigation request but index.html isn't cached, throw an error or return a generic offline response.
+        throw new Error('Network request failed and no cache available.');
+      });
+
+      // Return cached response immediately if available, otherwise wait for network
+      return cachedResponse || networkPromise;
+    })
   );
 });
 
